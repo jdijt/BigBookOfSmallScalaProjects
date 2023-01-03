@@ -34,41 +34,42 @@ def compareValues(guess: String, secret: String): String =
   }
   if clues.length == 0 then "Bagels" else clues.mkString(" ")
 
-def handleGuess(currentGuess: Int, secretNumber: String): IO[Unit] =
-  if currentGuess > guesses then Console[IO].println(outOfGuesses(secretNumber)) *> gameCompleted
+def handleGuess(currentGuess: Int, secretNumber: String, completer: IO[Unit]): IO[Unit] =
+  if currentGuess > guesses then Console[IO].println(outOfGuesses(secretNumber)) *> completer
   else
     for
       _     <- Console[IO].println(guess(currentGuess))
       input <- Console[IO].readLine
       _ <-
-        if input == secretNumber then Console[IO].println(success) *> gameCompleted
+        if input == secretNumber then Console[IO].println(success) *> completer
         else if input.forall(_.isDigit) then
           Console[IO].println(compareValues(input, secretNumber)) *> handleGuess(
             currentGuess + 1,
-            secretNumber
+            secretNumber,
+            completer
           )
-        else Console[IO].println(notANumber) *> handleGuess(currentGuess, secretNumber)
+        else Console[IO].println(notANumber) *> handleGuess(currentGuess, secretNumber, completer)
     yield ()
 
-val gameCompleted: IO[Unit] = for
+def gameCompleted(starter: IO[Unit]): IO[Unit] = for
   _        <- Console[IO].println(playAgain)
   response <- Console[IO].readLine
   _ <- response match
          case "no"  => Console[IO].println(thanks) *> IO.unit
-         case "yes" => startGame
+         case "yes" => starter
          case _ =>
-           Console[IO].println(invalidInput(response)) *> gameCompleted
+           Console[IO].println(invalidInput(response)) *> gameCompleted(starter)
 yield ()
 
-val startGame: IO[Unit] = for
-  rand   <- Random.scalaUtilRandom[IO]
+def startGame(rand: Random[IO]): IO[Unit] = for
   secret <- rand.betweenInt(100, 1000).map(_.toString)
   _      <- Console[IO].println(numberPickedText)
-  _      <- handleGuess(1, secret)
+  _      <- handleGuess(1, secret, gameCompleted(startGame(rand)))
 yield ()
 
 object Bagels extends IOApp.Simple:
   def run: IO[Unit] = for
-    _ <- Console[IO].println(welcomeText)
-    _ <- startGame
+    _         <- Console[IO].println(welcomeText)
+    generator <- Random.scalaUtilRandom[IO]
+    _         <- startGame(generator)
   yield ()
