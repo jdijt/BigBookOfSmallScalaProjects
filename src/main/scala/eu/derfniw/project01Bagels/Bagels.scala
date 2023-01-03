@@ -34,6 +34,10 @@ def compareValues(guess: String, secret: String): String =
   }
   if clues.length == 0 then "Bagels" else clues.mkString(" ")
 
+/**
+  * Handles a guess.
+  * Must know how to complete a game when we run out of guesses or when the guess is correct.
+  */
 def handleGuess(currentGuess: Int, secretNumber: String, completer: IO[Unit]): IO[Unit] =
   if currentGuess > guesses then Console[IO].println(outOfGuesses(secretNumber)) *> completer
   else
@@ -51,6 +55,9 @@ def handleGuess(currentGuess: Int, secretNumber: String, completer: IO[Unit]): I
         else Console[IO].println(notANumber) *> handleGuess(currentGuess, secretNumber, completer)
     yield ()
 
+/**
+  * Completes the game and asks for a restart, must know how to start a game.
+  */
 def gameCompleted(starter: IO[Unit]): IO[Unit] = for
   _        <- Console[IO].println(playAgain)
   response <- Console[IO].readLine
@@ -61,6 +68,9 @@ def gameCompleted(starter: IO[Unit]): IO[Unit] = for
            Console[IO].println(invalidInput(response)) *> gameCompleted(starter)
 yield ()
 
+/**
+  * Generates a secret with the supplied generator & kicks off the guessing.
+  */
 def startGame(rand: Random[IO]): IO[Unit] = for
   secret <- rand.betweenInt(100, 1000).map(_.toString)
   _      <- Console[IO].println(numberPickedText)
