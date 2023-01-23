@@ -18,14 +18,15 @@ enum Rank(val values: List[Int], val disp: String):
 
 case class Card(suit: Suit, rank: Rank, isOpen: Boolean):
   def open: Card = this.copy(isOpen = true)
-end Card
 
-type Deck = List[Card]
+class Deck(cards: List[Card]):
+  def take(n: Int): (List[Card], Deck) = (cards.take(n), Deck(cards.drop(n)))
+
 object Deck:
   import Rank.*
   import Suit.*
 
-  private val sortedDeck =
+  private val allCardsSorted =
     for
       suit <- List(Hearts, Diamonds, Clubs, Spades)
       rank <- (2 to 10).map(v => Number(v)) ++ List(Ace, King, Queen, Jack)
@@ -33,5 +34,5 @@ object Deck:
 
   def shuffledDeck: IO[Deck] =
     val generator = Random.javaUtilConcurrentThreadLocalRandom[IO]
-    generator.shuffleList(sortedDeck)
+    for cards <- generator.shuffleList(allCardsSorted) yield Deck(cards)
 end Deck

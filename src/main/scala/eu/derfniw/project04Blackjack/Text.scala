@@ -1,6 +1,6 @@
 package eu.derfniw.project04Blackjack
 
-object Strings:
+object Text:
   val rules = """|Rules:
                  |   Try to get as close to 21 without going over.
                  |   Kings, Queens, and Jacks are worth 10 points.
@@ -12,4 +12,4 @@ object Strings:
                  |   but must hit exactly one more time before standing.
                  |   In case of a tie, the bet is returned to the player.
                  |   The dealer stops hitting at 17.""".stripMargin
-  
+end Text
