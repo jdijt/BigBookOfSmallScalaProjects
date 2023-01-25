@@ -19,9 +19,6 @@ enum Rank(val values: List[Int], val disp: String):
 case class Card(suit: Suit, rank: Rank, isOpen: Boolean):
   def open: Card = this.copy(isOpen = true)
 
-class Deck(cards: List[Card]):
-  def take(n: Int): (List[Card], Deck) = (cards.take(n), Deck(cards.drop(n)))
-
 object Deck:
   import Rank.*
   import Suit.*
