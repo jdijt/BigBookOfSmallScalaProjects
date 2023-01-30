@@ -1,6 +1,6 @@
 package eu.derfniw.project04Blackjack
 
-import cats.effect.IO
+import cats.effect.*
 import cats.effect.std.Random
 
 enum Suit(val icon: Char):
@@ -16,20 +16,29 @@ enum Rank(val values: List[Int], val disp: String):
   case Jack           extends Rank(List(10), "J")
   case Number(v: Int) extends Rank(List(v), v.toString())
 
-case class Card(suit: Suit, rank: Rank, isOpen: Boolean):
-  def open: Card = this.copy(isOpen = true)
+case class Card(suit: Suit, rank: Rank)
 
+extension (l: List[Card])
+  def sumCards: Int =
+    val possibleValues = l.foldLeft(List(0)) { (currentSums, card) =>
+      for cs <- currentSums; v <- card.rank.values yield (cs + v)
+    }
+    if possibleValues.forall(_ > 21) then possibleValues.min
+    else possibleValues.filterNot(_ > 21).max
+
+type Deck = List[Card]
 object Deck:
   import Rank.*
   import Suit.*
 
-  private val allCardsSorted =
+  protected val allCardsSorted =
     for
       suit <- List(Hearts, Diamonds, Clubs, Spades)
       rank <- (2 to 10).map(v => Number(v)) ++ List(Ace, King, Queen, Jack)
-    yield Card(suit, rank, false)
+    yield Card(suit, rank)
 
   def shuffledDeck: IO[Deck] =
     val generator = Random.javaUtilConcurrentThreadLocalRandom[IO]
-    for cards <- generator.shuffleList(allCardsSorted) yield Deck(cards)
+    for cards <- generator.shuffleList(allCardsSorted)
+    yield cards
 end Deck
