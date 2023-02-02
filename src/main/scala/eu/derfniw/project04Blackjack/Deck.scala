@@ -18,7 +18,13 @@ enum Rank(val values: List[Int], val disp: String):
 
 case class Card(suit: Suit, rank: Rank)
 
-extension (l: List[Card])
+/** Due to cards potentially having multiple values (Ace) cannot just make them easily summable by
+  * implementing Numeric.
+  *
+  * Every time an Ace is encountered the number of possible combinations doubles, this method just
+  * calculates all and then pics the score closest to 21, preferring one that <= 21.
+  */
+extension (l: Seq[Card])
   def sumCards: Int =
     val possibleValues = l.foldLeft(List(0)) { (currentSums, card) =>
       for cs <- currentSums; v <- card.rank.values yield (cs + v)
