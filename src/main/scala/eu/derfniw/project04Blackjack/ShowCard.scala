@@ -33,8 +33,8 @@ given ShowCard[Card] with
         )
 end given
 
-given [A: ShowCard]: ShowCard[List[A]] with
-  extension (s: List[A])
+given [A: ShowCard]: ShowCard[Seq[A]] with
+  extension (s: Seq[A])
     def showCard(isOpen: Boolean): List[String] =
       if s.isEmpty then Nil
       else

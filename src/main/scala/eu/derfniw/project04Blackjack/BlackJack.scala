@@ -34,11 +34,11 @@ object BlackJack extends IOApp.Simple:
         if !continue then StateT.liftF(IO.unit)
         else
           for
-            _ <- dealInitialHands
-            _ <- playerActions()
-            // _ <- dealerActions()
-            // _ <- announceWinLose()
-            _ <- runGame
+            _           <- dealInitialHands
+            playerScore <- playerActions()
+            dealerScore <- dealerActions()
+            _           <- processWinLose(playerScore, dealerScore)
+            _           <- runGame
           yield ()
     yield ()
 
@@ -49,16 +49,18 @@ object BlackJack extends IOApp.Simple:
   def drawCard: GameState[Card] = StateT { st =>
     IO.pure(st.copy(deck = st.deck.tail), st.deck.head)
   }
-  def addPlayerCard(c: Card): GameState[Unit] = StateT { st =>
-    IO.pure(st.copy(playerHand = st.playerHand :+ c), ())
+  def addPlayerCard(c: Card): GameState[Int] = StateT { st =>
+    val newState = st.copy(playerHand = st.playerHand :+ c)
+    IO.pure(newState, newState.playerHand.sumCards)
   }
-  def addDealerCard(c: Card): GameState[Unit] = StateT { st =>
-    IO.pure(st.copy(dealerHand = st.dealerHand :+ c), ())
+  def addDealerCard(c: Card): GameState[Int] = StateT { st =>
+    val newState = st.copy(dealerHand = st.dealerHand :+ c)
+    IO.pure(newState, newState.dealerHand.sumCards)
   }
 
   def initialBet: GameState[Boolean] =
     def getValidBetInput(st: BlackJack): IO[Option[Int]] = for
-      _ <- IO.print(">")
+      _ <- IO.print("> ")
       l <- IO.readLine
       res <- l.toIntOption match
                case Some(i) if i > 0 && i <= st.playerMoney => IO.pure(Some(i))
@@ -94,11 +96,11 @@ object BlackJack extends IOApp.Simple:
     case Stand
     case Double
 
-  def playerActions(first: Boolean = true): GameState[Unit] =
+  def playerActions(first: Boolean = true): GameState[Int] =
     def readPlayerAction: IO[PlayerAction] =
       import PlayerAction.*
       for
-        _  <- IO.print(s"(H)it, (S)tand" + (if first then ", (D)ouble down" else ""))
+        _  <- IO.println(s"(H)it, (S)tand" + (if first then ", (D)ouble down" else ""))
         in <- IO.print(">") >> IO.readLine
         action <- in.map(_.toLower) match
                     case "h"          => Hit.pure[IO]
@@ -111,22 +113,63 @@ object BlackJack extends IOApp.Simple:
     for
       _      <- printState(false)
       action <- StateT.liftF(readPlayerAction)
-      _ <- action match
-             case PlayerAction.Hit =>
-               for
-                 card <- drawCard
-                 _    <- addPlayerCard(card)
-                 _    <- StateT((st: BlackJack) => if st.playerHand.sumCards > 21 then (st, IO.unit) else )
-               yield ()
-             case PlayerAction.Stand  => StateT.liftF(IO.unit)
-             case PlayerAction.Double => ???
-    yield ()
+      newScore <- action match
+                    case PlayerAction.Hit =>
+                      for
+                        card     <- drawCard
+                        newScore <- addPlayerCard(card)
+                      yield newScore
+                    case PlayerAction.Stand =>
+                      StateT.inspect[IO, BlackJack, Int](_.playerHand.sumCards)
+                    case PlayerAction.Double =>
+                      for
+                        _ <- StateT.modify[IO, BlackJack](st =>
+                               st.copy(
+                                 playerMoney = st.playerMoney - st.currentBet,
+                                 currentBet = st.currentBet * 2
+                               )
+                             )
+                        cards    <- List(drawCard, drawCard).sequence
+                        newScore <- cards.traverse(addPlayerCard).map(_.last)
+                      yield newScore
+      finalScore <-
+        if newScore > 21 then
+          StateT.liftF(IO.println("You went bust!, dealer's turn now") >> IO.pure(newScore))
+        else if action == PlayerAction.Stand then StateT.liftF(IO.pure(newScore))
+        else playerActions(false)
+    yield finalScore
     end for
   end playerActions
 
-  def dealerActions(): GameState[Unit] = ???
+  def dealerActions(): GameState[Int] =
+    for
+      _ <- printState(true)
+      _ <- StateT.liftF(IO.println("Press enter to let dealer continue...") >> IO.readLine)
+      newScore <- StateT
+                    .inspect[IO, BlackJack, Int]((st: BlackJack) => st.dealerHand.sumCards)
+                    .flatMap(score =>
+                      if score > 17 then StateT.liftF(score.pure)
+                      else
+                        for
+                          card       <- drawCard
+                          _          <- addDealerCard(card)
+                          finalScore <- dealerActions()
+                        yield finalScore
+                    )
+    yield newScore
 
-  def announceWinLose(): GameState[Unit] = ???
+  def processWinLose(playerScore: Int, dealerScore: Int): GameState[Unit] =
+    if playerScore > 21 && dealerScore > 21 then
+      StateT
+        .liftF(IO.println("Both bust, you get your bet back!"))
+        .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + st.currentBet))
+    else if dealerScore > 21 || (playerScore < 21 && playerScore > dealerScore) then
+      StateT
+        .liftF(IO.println("Player wins!"))
+        .modify((st:BlackJack) => st.copy(playerMoney = st.playerMoney + 2 * st.currentBet))
+    else 
+      StateT
+        .liftF(IO.println("Dealer wins!"))
 
   def printState(showDealer: Boolean): GameState[Unit] = StateT { st =>
     for
