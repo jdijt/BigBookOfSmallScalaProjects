@@ -72,14 +72,17 @@ object BlackJack extends IOApp.Simple:
     yield res
 
     StateT { st =>
-      for
-        _  <- IO.println(s"How much do you bet? (1-${st.playerMoney}, or QUIT)")
-        in <- getValidBetInput(st)
-        newState = in match
-                     case None      => st
-                     case Some(bet) => st.copy(playerMoney = st.playerMoney - bet, currentBet = bet)
-        continue = in.nonEmpty
-      yield (newState, continue)
+      if st.playerMoney == 0 then IO.println("You're broke!") >> IO.pure(st, false)
+      else
+        for
+          _  <- IO.println(s"How much do you bet? (1-${st.playerMoney}, or QUIT)")
+          in <- getValidBetInput(st)
+          newState = in match
+                       case None => st
+                       case Some(bet) =>
+                         st.copy(playerMoney = st.playerMoney - bet, currentBet = bet)
+          continue = in.nonEmpty
+        yield (newState, continue)
     }
   end initialBet
 
@@ -135,6 +138,8 @@ object BlackJack extends IOApp.Simple:
       finalScore <-
         if newScore > 21 then
           StateT.liftF(IO.println("You went bust!, dealer's turn now") >> IO.pure(newScore))
+        else if newScore == 21 then 
+          StateT.liftF(IO.println("Blackjack!, dealer's turn!") >> IO.pure(newScore))
         else if action == PlayerAction.Stand then StateT.liftF(IO.pure(newScore))
         else playerActions(false)
     yield finalScore
@@ -160,14 +165,20 @@ object BlackJack extends IOApp.Simple:
 
   def processWinLose(playerScore: Int, dealerScore: Int): GameState[Unit] =
     if playerScore > 21 && dealerScore > 21 then
-      StateT
-        .liftF(IO.println("Both bust, you get your bet back!"))
-        .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + st.currentBet))
-    else if dealerScore > 21 || (playerScore < 21 && playerScore > dealerScore) then
+      StateT.liftF(IO.println("Double bust, dealer wins."))
+    else if playerScore > 21 then
+      StateT.liftF(IO.println("Player Busted, dealer wins"))
+    // at this point: player <=21, dealer can be anything.
+    else if playerScore == dealerScore then
+      StateT.liftF(IO.println("Tie, no payout")).modify((st:BlackJack) => st.copy(playerMoney = st.playerMoney + st.currentBet))
+    else if playerScore > dealerScore && playerScore == 21 then // Implies dealer < 21, together with prev.
+      StateT.liftF(IO.println("Player wins with blackjack, 3:2 payout!"))
+        .modify((st: BlackJack) => st.copy(playerMoney = (st.playerMoney + 2.5 * st.currentBet).toInt)) //1x bet + 1.5 times bet payout
+    else if playerScore > dealerScore || dealerScore > 21 then // Here this is not the case, so we check for dealer bust
       StateT
         .liftF(IO.println("Player wins!"))
-        .modify((st:BlackJack) => st.copy(playerMoney = st.playerMoney + 2 * st.currentBet))
-    else 
+        .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + 2 * st.currentBet))
+    else
       StateT
         .liftF(IO.println("Dealer wins!"))
 
