@@ -27,11 +27,11 @@ object Strings:
   def guessMsg(in: Int)            = s"Guess #$in"
 end Strings
 
-class SingleGame(secret: String, guesses: Int):
+class SingleGame(secret: String, guesses: Int)(using c: Console[IO]):
   import Strings.*
 
   def start: IO[Unit] = for
-    _ <- Console[IO].println(numberPickedText(guesses))
+    _ <- c.println(numberPickedText(guesses))
     _ <- loop(1)
   yield ()
 
@@ -43,39 +43,39 @@ class SingleGame(secret: String, guesses: Int):
     if clues.length == 0 then "Bagels" else clues.mkString(" ")
 
   private def loop(currentGuess: Int): IO[Unit] =
-    if currentGuess > guesses then Console[IO].println(outOfGuesses(secret))
+    if currentGuess > guesses then c.println(outOfGuesses(secret))
     else
       for
-        _     <- Console[IO].println(guessMsg(currentGuess))
-        input <- Console[IO].readLine
+        _     <- c.println(guessMsg(currentGuess))
+        input <- c.readLine
         _ <-
-          if input == secret then Console[IO].println(success)
+          if input == secret then c.println(success)
           else if input.length == 3 && input.forall(_.isDigit) then
-            Console[IO].println(getClues(input)) >> loop(currentGuess + 1)
-          else Console[IO].println(invalidInputMsg(input)) >> loop(currentGuess)
+            c.println(getClues(input)) >> loop(currentGuess + 1)
+          else c.println(invalidInputMsg(input)) >> loop(currentGuess)
       yield ()
 end SingleGame
 
-class MultiGameRunner(rand: Random[IO]):
+class MultiGameRunner(rand: Random[IO])(using c: Console[IO]):
   import Strings.*
 
   val guesses = 10
 
   val run: IO[Unit] = for
-    _      <- Console[IO].println(welcomeText)
+    _      <- c.println(welcomeText)
     secret <- rand.betweenInt(1, 1000).map(i => f"$i%03d")
     _      <- SingleGame(secret, guesses).start
     again  <- askPlayAgain
-    _      <- if again then run else Console[IO].println(thanks)
+    _      <- if again then run else c.println(thanks)
   yield ()
 
   val askPlayAgain: IO[Boolean] = for
-    _        <- Console[IO].println(playAgain)
-    response <- Console[IO].readLine
+    _        <- c.println(playAgain)
+    response <- c.readLine
     result <- response match
                 case "yes" => IO.pure(true)
                 case "no"  => IO.pure(false)
-                case _     => Console[IO].println(invalidInputMsg(response)) >> askPlayAgain
+                case _     => c.println(invalidInputMsg(response)) >> askPlayAgain
   yield result
 end MultiGameRunner
 

@@ -4,6 +4,7 @@ import cats.*
 import cats.data.StateT
 import cats.effect.IO
 import cats.effect.IOApp
+import cats.effect.std.Console
 import cats.implicits.*
 
 case class BlackJack(
@@ -20,13 +21,15 @@ object BlackJack extends IOApp.Simple:
 
   val initialState: BlackJack = BlackJack(5000, 0, List(), List(), List())
 
-  def run: IO[Unit] = for
-    _  <- IO.println(Text.rules)
-    fs <- runGame.runS(initialState)
-    _  <- IO.println(s"You completed the game with ${fs.playerMoney} money in the end!")
+  override def run: IO[Unit] = runGame
+
+  def runGame(using c: Console[IO]): IO[Unit] = for
+    _  <- c.println(Text.rules)
+    fs <- gameLoop.runS(initialState)
+    _  <- c.println(s"You completed the game with ${fs.playerMoney} money in the end!")
   yield ()
 
-  def runGame: GameState[Unit] =
+  def gameLoop: GameState[Unit] =
     for
       _        <- renewDeck
       continue <- initialBet
@@ -36,9 +39,9 @@ object BlackJack extends IOApp.Simple:
           for
             _           <- dealInitialHands
             playerScore <- playerActions()
-            dealerScore <- dealerActions()
+            dealerScore <- dealerActions
             _           <- processWinLose(playerScore, dealerScore)
-            _           <- runGame
+            _           <- gameLoop
           yield ()
     yield ()
 
@@ -58,24 +61,24 @@ object BlackJack extends IOApp.Simple:
     IO.pure(newState, newState.dealerHand.sumCards)
   }
 
-  def initialBet: GameState[Boolean] =
+  def initialBet(using c: Console[IO]): GameState[Boolean] =
     def getValidBetInput(st: BlackJack): IO[Option[Int]] = for
-      _ <- IO.print("> ")
-      l <- IO.readLine
+      _ <- c.print("> ")
+      l <- c.readLine
       res <- l.toIntOption match
                case Some(i) if i > 0 && i <= st.playerMoney => IO.pure(Some(i))
                case None if l == "QUIT"                     => IO.pure(None)
                case Some(i) if i > st.playerMoney =>
-                 IO.println("You cannot bet more than you have!") >> getValidBetInput(st)
-               case Some(i) => IO.println("Bet must be greater than 0") >> getValidBetInput(st)
-               case None    => IO.println("Invalid number") >> getValidBetInput(st)
+                 c.println("You cannot bet more than you have!") >> getValidBetInput(st)
+               case Some(i) => c.println("Bet must be greater than 0") >> getValidBetInput(st)
+               case None    => c.println("Invalid number") >> getValidBetInput(st)
     yield res
 
     StateT { st =>
-      if st.playerMoney == 0 then IO.println("You're broke!") >> IO.pure(st, false)
+      if st.playerMoney == 0 then c.println("You're broke!") >> IO.pure(st, false)
       else
         for
-          _  <- IO.println(s"How much do you bet? (1-${st.playerMoney}, or QUIT)")
+          _  <- c.println(s"How much do you bet? (1-${st.playerMoney}, or QUIT)")
           in <- getValidBetInput(st)
           newState = in match
                        case None => st
@@ -99,17 +102,17 @@ object BlackJack extends IOApp.Simple:
     case Stand
     case Double
 
-  def playerActions(first: Boolean = true): GameState[Int] =
+  def playerActions(first: Boolean = true)(using c: Console[IO]): GameState[Int] =
     def readPlayerAction: IO[PlayerAction] =
       import PlayerAction.*
       for
-        _  <- IO.println(s"(H)it, (S)tand" + (if first then ", (D)ouble down" else ""))
-        in <- IO.print(">") >> IO.readLine
+        _  <- c.println(s"(H)it, (S)tand" + (if first then ", (D)ouble down" else ""))
+        in <- c.print(">") >> c.readLine
         action <- in.map(_.toLower) match
                     case "h"          => Hit.pure[IO]
                     case "s"          => Stand.pure[IO]
                     case "d" if first => Double.pure[IO]
-                    case _            => IO.println(s"""Invalid input: "$in"""") >> readPlayerAction
+                    case _            => c.println(s"""Invalid input: "$in"""") >> readPlayerAction
       yield action
     end readPlayerAction
 
@@ -137,19 +140,19 @@ object BlackJack extends IOApp.Simple:
                       yield newScore
       finalScore <-
         if newScore > 21 then
-          StateT.liftF(IO.println("You went bust!, dealer's turn now") >> IO.pure(newScore))
-        else if newScore == 21 then 
-          StateT.liftF(IO.println("Blackjack!, dealer's turn!") >> IO.pure(newScore))
+          StateT.liftF(c.println("You went bust!, dealer's turn now") >> IO.pure(newScore))
+        else if newScore == 21 then
+          StateT.liftF(c.println("Blackjack!, dealer's turn!") >> IO.pure(newScore))
         else if action == PlayerAction.Stand then StateT.liftF(IO.pure(newScore))
         else playerActions(false)
     yield finalScore
     end for
   end playerActions
 
-  def dealerActions(): GameState[Int] =
+  def dealerActions(using c: Console[IO]): GameState[Int] =
     for
       _ <- printState(true)
-      _ <- StateT.liftF(IO.println("Press enter to let dealer continue...") >> IO.readLine)
+      _ <- StateT.liftF(c.println("Press enter to let dealer continue...") >> c.readLine)
       newScore <- StateT
                     .inspect[IO, BlackJack, Int]((st: BlackJack) => st.dealerHand.sumCards)
                     .flatMap(score =>
@@ -158,40 +161,44 @@ object BlackJack extends IOApp.Simple:
                         for
                           card       <- drawCard
                           _          <- addDealerCard(card)
-                          finalScore <- dealerActions()
+                          finalScore <- dealerActions
                         yield finalScore
                     )
     yield newScore
 
-  def processWinLose(playerScore: Int, dealerScore: Int): GameState[Unit] =
+  def processWinLose(playerScore: Int, dealerScore: Int)(using c: Console[IO]): GameState[Unit] =
     if playerScore > 21 && dealerScore > 21 then
-      StateT.liftF(IO.println("Double bust, dealer wins."))
-    else if playerScore > 21 then
-      StateT.liftF(IO.println("Player Busted, dealer wins"))
+      StateT.liftF(c.println("Double bust, dealer wins."))
+    else if playerScore > 21 then StateT.liftF(c.println("Player Busted, dealer wins"))
     // at this point: player <=21, dealer can be anything.
     else if playerScore == dealerScore then
-      StateT.liftF(IO.println("Tie, no payout")).modify((st:BlackJack) => st.copy(playerMoney = st.playerMoney + st.currentBet))
+      StateT
+        .liftF(c.println("Tie, no payout"))
+        .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + st.currentBet))
     else if playerScore > dealerScore && playerScore == 21 then // Implies dealer < 21, together with prev.
-      StateT.liftF(IO.println("Player wins with blackjack, 3:2 payout!"))
-        .modify((st: BlackJack) => st.copy(playerMoney = (st.playerMoney + 2.5 * st.currentBet).toInt)) //1x bet + 1.5 times bet payout
+      StateT
+        .liftF(c.println("Player wins with blackjack, 3:2 payout!"))
+        .modify((st: BlackJack) =>
+          st.copy(playerMoney = (st.playerMoney + 2.5 * st.currentBet).toInt)
+        ) // 1x bet + 1.5 times bet payout
     else if playerScore > dealerScore || dealerScore > 21 then // Here this is not the case, so we check for dealer bust
       StateT
-        .liftF(IO.println("Player wins!"))
+        .liftF(c.println("Player wins!"))
         .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + 2 * st.currentBet))
     else
       StateT
-        .liftF(IO.println("Dealer wins!"))
+        .liftF(c.println("Dealer wins!"))
 
-  def printState(showDealer: Boolean): GameState[Unit] = StateT { st =>
+  def printState(showDealer: Boolean)(using c: Console[IO]): GameState[Unit] = StateT { st =>
     for
-      _ <- IO.println(s"Bet: ${st.currentBet}")
-      _ <- IO.println("")
-      _ <- IO.println(if showDealer then s"Dealer: ${st.dealerHand.sumCards}" else s"Dealer: ???")
-      _ <- st.dealerHand.showCard(showDealer).traverse(IO.println)
-      _ <- IO.println("")
-      _ <- IO.println(s"Player: ${st.playerHand.sumCards}")
-      _ <- st.playerHand.showCard(true).traverse(IO.println)
-      _ <- IO.println("")
+      _ <- c.println(s"Bet: ${st.currentBet}")
+      _ <- c.println("")
+      _ <- c.println(if showDealer then s"Dealer: ${st.dealerHand.sumCards}" else s"Dealer: ???")
+      _ <- st.dealerHand.showCard(showDealer).traverse(c.println)
+      _ <- c.println("")
+      _ <- c.println(s"Player: ${st.playerHand.sumCards}")
+      _ <- st.playerHand.showCard(true).traverse(c.println)
+      _ <- c.println("")
     yield (st, ())
   }
 end BlackJack
