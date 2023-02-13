@@ -28,7 +28,7 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
     val validAnswer = oneOf(yes, no)
 
     val inputWithValidAnswer =
-      listOf(frequency((1, validAnswer), (20, arbitrary[String])))
+      listOf(frequency((1, validAnswer), (10, arbitrary[String])))
         .suchThat(_.exists(s => s.equalsIgnoreCase("yes") || s.equalsIgnoreCase("no")))
   end AskPlayAgainGens
 
