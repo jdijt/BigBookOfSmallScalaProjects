@@ -17,6 +17,7 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
   import eu.derfniw.project01Bagels.Bagels.*
 
   override def scalaCheckTestParameters = super.scalaCheckTestParameters.withMinSuccessfulTests(100)
+  override def munitTimeout: Duration   = 5.seconds
 
   object AskPlayAgainGens:
     import Gen.*
