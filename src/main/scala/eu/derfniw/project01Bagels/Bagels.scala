@@ -2,10 +2,12 @@ package eu.derfniw.project01Bagels
 
 import scala.annotation.tailrec
 
+import cats.*
+import cats.data.StateT
 import cats.effect.*
-import cats.effect.IO
 import cats.effect.std.Console
 import cats.effect.std.Random
+import cats.implicits.*
 
 object Strings:
   val success = "You got it!"
@@ -20,56 +22,53 @@ object Strings:
   val thanks                              = "Thanks for playing!"
   def invalidInputMsg(in: String): String = s"I do not understand $in. Please try again."
 
-  def numberPickedText(guesses: Int) =
+  val numberPickedText =
     s"""|I have thought up a number.
-        | You have $guesses guesses to get it.""".stripMargin
+        | You have ${GameState.defaultGuesses} guesses to get it.""".stripMargin
   def outOfGuesses(secret: String) = s"You're out of guesses, the number was $secret."
-  def guessMsg(in: Int)            = s"Guess #$in"
+  def guessMsg(in: Int)            = s"Guesses left: $in"
 end Strings
 
-class SingleGame(secret: String, guesses: Int)(using c: Console[IO]):
+case class GameState(secret: String, guesses: Int):
+  def decrementGuesses = this.copy(guesses = guesses - 1)
+
+object GameState:
+  val defaultGuesses = 10
+
+  def apply(secret: String): GameState = new GameState(secret, defaultGuesses)
+
+object Bagels extends IOApp.Simple:
   import Strings.*
 
-  def start: IO[Unit] = for
-    _ <- c.println(numberPickedText(guesses))
-    _ <- loop(1)
-  yield ()
+  def run: IO[Unit] =
+    val c = summon[Console[IO]]
+    for
+      generator <- Random.scalaUtilRandom[IO]
+      _         <- c.println(welcomeText)
+      _         <- mainLoop(generator)
+    yield ()
 
-  private def getClues(guess: String): String =
-    val clues = guess.zip(secret).collect {
-      case (g, a) if g == a             => "Fermi"
-      case (g, _) if secret.contains(g) => "Pico"
-    }
-    if clues.length == 0 then "Bagels" else clues.mkString(" ")
-
-  private def loop(currentGuess: Int): IO[Unit] =
-    if currentGuess > guesses then c.println(outOfGuesses(secret))
-    else
-      for
-        _     <- c.println(guessMsg(currentGuess))
-        input <- c.readLine
-        _ <-
-          if input == secret then c.println(success)
-          else if input.length == 3 && input.forall(_.isDigit) then
-            c.println(getClues(input)) >> loop(currentGuess + 1)
-          else c.println(invalidInputMsg(input)) >> loop(currentGuess)
-      yield ()
-end SingleGame
-
-class MultiGameRunner(rand: Random[IO])(using c: Console[IO]):
-  import Strings.*
-
-  val guesses = 10
-
-  val run: IO[Unit] = for
-    _      <- c.println(welcomeText)
+  def mainLoop(rand: Random[IO])(using c: Console[IO]): IO[Unit] = for
     secret <- rand.betweenInt(1, 1000).map(i => f"$i%03d")
-    _      <- SingleGame(secret, guesses).start
-    again  <- askPlayAgain
-    _      <- if again then run else c.println(thanks)
+    _      <- c.println(numberPickedText)
+    again  <- singleGame.runA(GameState(secret))
+    _      <- if again then mainLoop(rand) else c.println(thanks)
   yield ()
 
-  val askPlayAgain: IO[Boolean] = for
+  def singleGame(using c: Console[IO]): StateT[IO, GameState, Boolean] = for
+    guess <- StateT.apply[IO, GameState, String](st =>
+               askValidGuess(st.guesses).map(guess => (st.decrementGuesses, guess))
+             )
+    state <- StateT.get[IO, GameState]
+    again <- if guess == state.secret then StateT.liftF(c.println(success) >> askPlayAgain)
+             else if state.guesses == 0 then
+               StateT.liftF(c.println(outOfGuesses(state.secret)) >> askPlayAgain)
+             else
+               val clues = getClues(state.secret, guess)
+               StateT.liftF(c.println(clues.mkString(" "))) >> singleGame
+  yield again
+
+  def askPlayAgain(using c: Console[IO]): IO[Boolean] = for
     _        <- c.println(playAgain)
     response <- c.readLine
     result <- response match
@@ -77,12 +76,18 @@ class MultiGameRunner(rand: Random[IO])(using c: Console[IO]):
                 case "no"  => IO.pure(false)
                 case _     => c.println(invalidInputMsg(response)) >> askPlayAgain
   yield result
-end MultiGameRunner
 
-object Bagels extends IOApp.Simple:
-  def run: IO[Unit] = for
-    generator <- Random.scalaUtilRandom[IO]
-    _         <- MultiGameRunner(generator).run
-  yield ()
+  def askValidGuess(guesses: Int)(using c: Console[IO]): IO[String] = for
+    _    <- c.println(guessMsg(guesses))
+    read <- c.readLine
+    valid <- if read.length == 3 && read.forall(_.isDigit) then read.pure[IO]
+             else c.println(invalidInputMsg(read)) >> askValidGuess(guesses)
+  yield valid
 
+  def getClues(secret: String, guess: String): List[String] =
+    val clues = guess.toList.zip(secret).collect {
+      case (g, a) if g == a             => "Fermi"
+      case (g, _) if secret.contains(g) => "Pico"
+    }
+    if clues.length == 0 then List("Bagels") else clues
 end Bagels
