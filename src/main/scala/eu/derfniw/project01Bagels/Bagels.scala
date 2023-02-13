@@ -71,7 +71,7 @@ object Bagels extends IOApp.Simple:
   def askPlayAgain(using c: Console[IO]): IO[Boolean] = for
     _        <- c.println(playAgain)
     response <- c.readLine
-    result <- response match
+    result <- response.toLowerCase() match
                 case "yes" => IO.pure(true)
                 case "no"  => IO.pure(false)
                 case _     => c.println(invalidInputMsg(response)) >> askPlayAgain
