@@ -42,7 +42,7 @@ end TestConsole
 
 object TestConsole:
 
-  def make(linesToRead: Seq[String]): IO[Console[IO]] = for
+  def make(linesToRead: String*): IO[Console[IO]] = for
     readRef   <- IO.ref(linesToRead.toVector)
     stdOutRef <- IO.ref("")
     stdErrRef <- IO.ref("")
