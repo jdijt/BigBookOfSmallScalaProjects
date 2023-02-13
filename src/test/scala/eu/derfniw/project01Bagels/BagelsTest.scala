@@ -18,18 +18,38 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
 
   override def scalaCheckTestParameters = super.scalaCheckTestParameters.withMinSuccessfulTests(100)
 
-  val validPlayAgainAnswer = Gen.oneOf("Yes", "yes", "YES", "No", "no", "NO")
-  test("AskPlayAgain should return the correct result for a given valid input") {
-    TestConsole.make("Yes").flatMap(c => askPlayAgain(using c)).map(r => assertEquals(r, true))
-    TestConsole.make("No").flatMap(c => askPlayAgain(using c)).map(r => assertEquals(r, false))
+  object AskPlayAgainGens:
+    import Gen.*
+    // Yes and no in random casing
+    // There is probably more elegant ways of solving this.
+    val yes         = oneOf("yes", "YES", "Yes", "yEs", "yeS", "YEs", "YeS", "yES")
+    val no          = oneOf("no", "NO", "nO", "No")
+    val validAnswer = oneOf(yes, no)
+
+    val inputWithValidAnswer =
+      listOf(frequency((1, validAnswer), (20, arbitrary[String])))
+        .suchThat(_.exists(s => s.equalsIgnoreCase("yes") || s.equalsIgnoreCase("no")))
+  end AskPlayAgainGens
+
+  test("AskPlayAgain should return true for all casings of yes") {
+    PropF.forAllF(AskPlayAgainGens.yes) { in =>
+      TestConsole.make(in).flatMap(c => askPlayAgain(using c)).map(r => assertEquals(r, true))
+    }
+  }
+  test("AskPlayAgain should return false for all casings of no") {
+    PropF.forAllF(AskPlayAgainGens.no) { in =>
+      TestConsole.make(in).flatMap(c => askPlayAgain(using c)).map(r => assertEquals(r, false))
+    }
   }
   test("AskPlayAgain should terminate if input contains a valid answer") {
-    PropF.forAllF(arbitrary[Seq[String]], validPlayAgainAnswer) { (prefix, last) =>
-      val expected = last.toLowerCase() == "yes"
+    PropF.forAllF(AskPlayAgainGens.inputWithValidAnswer) { in =>
       TestConsole
-        .make((prefix :+ last)*)
-        .flatMap(c => askPlayAgain(using c))
-        .map(r => assertEquals(r, expected))
+        .make(in*)
+        .flatMap(c => IO.race(askPlayAgain(using c), IO.sleep(1.seconds) >> IO.unit))
+        .map {
+          case Left(_)  => ()
+          case Right(_) => assert(false, "askPlayAgain timed out")
+        }
     }
   }
 
