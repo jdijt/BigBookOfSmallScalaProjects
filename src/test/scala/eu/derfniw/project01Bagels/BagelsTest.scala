@@ -16,8 +16,7 @@ import org.scalacheck.effect.PropF
 class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
   import eu.derfniw.project01Bagels.Bagels.*
 
-  override def scalaCheckTestParameters = super.scalaCheckTestParameters.withMinSuccessfulTests(100)
-  override def munitTimeout: Duration   = 5.seconds
+  override def munitTimeout: Duration = 5.seconds
 
   object AskPlayAgainGens:
     import Gen.*
@@ -28,7 +27,7 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
     val validAnswer = oneOf(yes, no)
 
     val inputWithValidAnswer =
-      listOf(frequency((1, validAnswer), (10, arbitrary[String])))
+      listOf(frequency((1, validAnswer), (10, Gen.alphaStr)))
         .suchThat(_.exists(s => s.equalsIgnoreCase("yes") || s.equalsIgnoreCase("no")))
   end AskPlayAgainGens
 
@@ -49,7 +48,39 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
         .flatMap(c => IO.race(askPlayAgain(using c), IO.sleep(1.seconds) >> IO.unit))
         .map {
           case Left(_)  => ()
-          case Right(_) => assert(false, "askPlayAgain timed out")
+          case Right(_) => assert(false, "askPlayAgain blocked with valid input")
+        }
+    }
+  }
+
+  object AskValidGuessGens:
+    import Gen.*
+    val invalidGuess = alphaStr
+    // Should always be length 3, but theoretically can be < 3, we need 3 always.
+    // Hence the suchThat
+    val validGuess   = listOfN(3, numChar).map(_.mkString).suchThat(_.length == 3)
+    val validGuesses = listOf(validGuess).suchThat(_.length >= 1)
+
+    val listWithValidGuess = listOf(frequency((1, validGuess), (10, invalidGuess)))
+      .suchThat(_.exists(s => s.length == 3 && s.forall(_.isDigit))) // Implicit length >= 1
+
+  test("AskValidGuess should return first valid response.") {
+    PropF.forAllF(AskValidGuessGens.validGuesses) { guesses =>
+      TestConsole
+        .make(guesses*)
+        .flatMap(c => askValidGuess(0)(using c))
+        .map(result => assertEquals(result, guesses.head))
+    }
+  }
+
+  test("AskValidGuess should terminate if input contains a valid guess") {
+    PropF.forAllF(AskValidGuessGens.listWithValidGuess) { guesses =>
+      TestConsole
+        .make(guesses*)
+        .flatMap(c => IO.race(askValidGuess(0)(using c), IO.sleep(1.seconds) >> IO.unit))
+        .map {
+          case Left(_)  => ()
+          case Right(_) => assert(false, "askValidGuess blocked with valid input")
         }
     }
   }
