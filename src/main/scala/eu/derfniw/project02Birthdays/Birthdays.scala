@@ -40,7 +40,7 @@ def runSimulations(simulationCount: Int, birthdayCount: Int): IO[List[Boolean]] 
       for
         dates <- List
                    .range(0, birthdayCount)
-                   .map(d =>
+                   .map(_ =>
                      for day <- generator.betweenInt(1, 366)
                      yield LocalDate.ofYearDay(2023, day)
                    )
@@ -63,8 +63,8 @@ object App extends IOApp.Simple:
       results <- runSimulations(100000, num)
       _       <- IO.println(Strings.result(num, results.count(_ == true)))
       _       <- IO.println("Run again? (y or n)")
-      answ    <- IO.readLine
-      _       <- if answ == "y" || answ == "yes" then run else IO.println("Ok, bye!")
+      answer  <- IO.readLine
+      _       <- if answer == "y" || answer == "yes" then run else IO.println("Ok, bye!")
     yield ()
     end for
   end run

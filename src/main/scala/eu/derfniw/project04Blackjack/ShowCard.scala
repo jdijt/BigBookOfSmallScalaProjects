@@ -10,9 +10,9 @@ trait ShowCard[A]:
 /** Don't download left-pad from the internet kids ;) .
   */
 extension (s: String)
-  def leftPadTo(length: Int, filler: Char) =
+  def leftPadTo(length: Int, filler: Char): String =
     val numToPrepend = math.max(0, length - s.length())
-    (filler.toString() * numToPrepend) + s
+    (filler.toString * numToPrepend) + s
 
 given ShowCard[Card] with
   extension (c: Card)
@@ -20,9 +20,9 @@ given ShowCard[Card] with
       if isOpen then
         List(
           s" ___  ",
-          s"|${c.rank.disp.padTo(2, ' ')} | ",
+          s"|${c.rank.display.padTo(2, ' ')} | ",
           s"| ${c.suit.icon} | ",
-          s"|_${c.rank.disp.leftPadTo(2, '_')}| "
+          s"|_${c.rank.display.leftPadTo(2, '_')}| "
         )
       else
         List(

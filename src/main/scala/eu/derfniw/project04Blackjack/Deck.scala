@@ -9,12 +9,12 @@ enum Suit(val icon: Char):
   case Clubs    extends Suit(0x2663)
   case Spades   extends Suit(0x2660)
 
-enum Rank(val values: List[Int], val disp: String):
+enum Rank(val values: List[Int], val display: String):
   case Ace            extends Rank(List(1, 11), "A")
   case King           extends Rank(List(10), "K")
   case Queen          extends Rank(List(10), "Q")
   case Jack           extends Rank(List(10), "J")
-  case Number(v: Int) extends Rank(List(v), v.toString())
+  case Number(v: Int) extends Rank(List(v), v.toString)
 
 case class Card(suit: Suit, rank: Rank)
 
@@ -27,7 +27,7 @@ case class Card(suit: Suit, rank: Rank)
 extension (l: Seq[Card])
   def sumCards: Int =
     val possibleValues = l.foldLeft(List(0)) { (currentSums, card) =>
-      for cs <- currentSums; v <- card.rank.values yield (cs + v)
+      for cs <- currentSums; v <- card.rank.values yield cs + v
     }
     if possibleValues.forall(_ > 21) then possibleValues.min
     else possibleValues.filterNot(_ > 21).max

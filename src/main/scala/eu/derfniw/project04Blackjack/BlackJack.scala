@@ -70,7 +70,7 @@ object BlackJack extends IOApp.Simple:
                case None if l == "QUIT"                     => IO.pure(None)
                case Some(i) if i > st.playerMoney =>
                  c.println("You cannot bet more than you have!") >> getValidBetInput(st)
-               case Some(i) => c.println("Bet must be greater than 0") >> getValidBetInput(st)
+               case Some(_) => c.println("Bet must be greater than 0") >> getValidBetInput(st)
                case None    => c.println("Invalid number") >> getValidBetInput(st)
     yield res
 
@@ -106,7 +106,7 @@ object BlackJack extends IOApp.Simple:
     def readPlayerAction: IO[PlayerAction] =
       import PlayerAction.*
       for
-        _  <- c.println(s"(H)it, (S)tand" + (if first then ", (D)ouble down" else ""))
+        _  <- c.println(s"(H): Hit, (S): Stand" + (if first then ", (D): Double down" else ""))
         in <- c.print(">") >> c.readLine
         action <- in.map(_.toLower) match
                     case "h"          => Hit.pure[IO]

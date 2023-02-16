@@ -1,16 +1,16 @@
 package eu.derfniw.project01Bagels
 
+import eu.derfniw.testutils.TestConsole
+
 import cats.*
 import cats.effect.*
 import cats.implicits.*
-import eu.derfniw.testutils.TestConsole
-
 import concurrent.duration.*
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Prop.*
 import org.scalacheck.Gen
+import org.scalacheck.Prop.*
 import org.scalacheck.Test.Parameters
 import org.scalacheck.effect.PropF
 
@@ -23,11 +23,10 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
     import Gen.*
     // Should always be length 3, but theoretically can be < 3, we need 3 always.
     // Hence the suchThat
-    val validGuess   = listOfN(3, numChar).map(_.mkString).suchThat(_.length == 3)
+    val validGuess: Gen[String] = listOfN(3, numChar).map(_.mkString).suchThat(_.length == 3)
 
-
-  property("getClues should return 1 to 3 hints"){
-    forAll(Gens.validGuess, Gens.validGuess){ (secret, guess) =>
+  property("getClues should return 1 to 3 hints") {
+    forAll(Gens.validGuess, Gens.validGuess) { (secret, guess) =>
       val hints = getClues(secret, guess)
       assert(hints.nonEmpty && hints.length <= 3, s"Hints returned wrong size list: ${hints.size}")
     }
