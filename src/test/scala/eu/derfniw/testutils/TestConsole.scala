@@ -1,4 +1,4 @@
-package eu.derfniw.utils
+package eu.derfniw.testutils
 
 import eu.derfniw.project01Bagels.Strings.success
 
