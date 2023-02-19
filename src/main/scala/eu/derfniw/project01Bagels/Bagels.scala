@@ -3,13 +3,12 @@ package eu.derfniw.project01Bagels
 import eu.derfniw.utils.readValidValue
 
 import scala.annotation.tailrec
-
 import cats.*
-import cats.data.StateT
+import cats.data.*
 import cats.effect.*
-import cats.effect.std.Console
-import cats.effect.std.Random
-import cats.implicits.*
+import cats.effect.std.{Console, Random}
+import cats.effect.syntax.all.*
+import cats.syntax.all.*
 
 object Strings:
   val success: String = "You got it!"
@@ -42,6 +41,8 @@ object GameState:
 object Bagels extends IOApp.Simple:
   import Strings.*
 
+  type GState[A] = StateT[IO, GameState, A]
+
   def run: IO[Unit] =
     val c = summon[Console[IO]]
     for
@@ -53,33 +54,24 @@ object Bagels extends IOApp.Simple:
   def mainLoop(rand: Random[IO])(using c: Console[IO]): IO[Unit] = for
     secret <- rand.betweenInt(1, 1000).map(i => f"$i%03d")
     _      <- c.println(numberPickedText)
-    again  <- singleGame.runA(GameState(secret))
+    _      <- singleGame.runA(GameState(secret))
+    again  <- readValidValue(playAgain, parsePlayAgain)
     _      <- if again then mainLoop(rand) else c.println(thanks)
   yield ()
 
-  def singleGame(using c: Console[IO]): StateT[IO, GameState, Boolean] =
+  def singleGame(using c: Console[IO]): GState[Unit] =
     for
-      guess <- StateT.apply[IO, GameState, String](st =>
-                 readValidValue(guessMsg(st.guesses), parseValidGuess).map(guess =>
-                   (st.decrementGuesses, guess)
-                 )
-               )
-      state <- StateT.get[IO, GameState]
-      again <-
-        if guess == state.secret then
-          StateT.liftF(c.println(success) >> readValidValue(playAgain, parsePlayAgain))
-        else if state.guesses == 0 then
-          StateT.liftF(
-            c.println(outOfGuesses(state.secret)) >> readValidValue(
-              playAgain,
-              parsePlayAgain
-            )
-          )
-        else
-          val clues = getClues(state.secret, guess)
-          StateT.liftF(c.println(clues.mkString(" "))) >> singleGame
-    yield again
-    end for
+      guess <- StateT.apply { (st: GameState) =>
+                 for g <- readValidValue(guessMsg(st.guesses), parseValidGuess)
+                 yield (st.decrementGuesses, g)
+               }
+      finished <- StateT.inspectF { (st: GameState) =>
+                    if guess == st.secret then c.println(success) >> true.pure[IO]
+                    else if st.guesses == 0 then c.println(outOfGuesses(st.secret)) >> true.pure[IO]
+                    else c.println(getClues(st.secret, guess).mkString(" ")) >> false.pure[IO]
+                  }
+      _ <- if finished then ().pure[GState] else singleGame
+    yield ()
   end singleGame
 
   def parsePlayAgain(in: String): Either[Boolean, String] = in.toLowerCase() match

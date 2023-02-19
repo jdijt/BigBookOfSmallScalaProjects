@@ -25,6 +25,45 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
     // Hence the suchThat
     val validGuess: Gen[String] = listOfN(3, numChar).map(_.mkString).suchThat(_.length == 3)
 
+    val playAgainAnswer: Gen[String] =
+      oneOf("yes", "Yes", "yEs", "yeS", "YEs", "YeS", "yES", "YES", "no", "nO", "No", "NO")
+
+  property("parseValidGuess should only accept input with length 3") {
+    forAll(Gen.numStr) { num =>
+      parseValidGuess(num) match
+        case Left(n) if n.length == 3 => assertEquals(n, num)
+        case Left(_)                  => assert(false, "Accepted input with length not 3")
+        case Right(_)                 => assert(num.length != 3)
+    }
+  }
+
+  property("parseValidGuess should fail on all non-numeric strings") {
+    forAll { (s: String) =>
+      (!s.forall(_.isDigit)) ==> assert(parseValidGuess(s).isRight)
+    }
+  }
+
+  property("parseValidGuess should return the value of a valid guess") {
+    forAll(Gens.validGuess)(n => assertEquals(parseValidGuess(n), Left(n)))
+  }
+
+  test("parsePlayAgain should return true for yes, and false for no") {
+    assertEquals(parsePlayAgain("yes"), Left(true))
+    assertEquals(parsePlayAgain("no"), Left(false))
+  }
+
+  property("parsePlayAgain should accept valid answers in any casing combination") {
+    forAll(Gens.playAgainAnswer)(in => assert(parsePlayAgain(in).isLeft))
+  }
+
+  property("parsePlayAgain should not accept any other values") {
+    forAll { (in: String) =>
+      (in.toLowerCase != "yes" && in.toLowerCase != "no") ==> {
+        assert(parsePlayAgain(in).isRight)
+      }
+    }
+  }
+
   property("getClues should return 1 to 3 hints") {
     forAll(Gens.validGuess, Gens.validGuess) { (secret, guess) =>
       val hints = getClues(secret, guess)
@@ -52,4 +91,30 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
     }
   }
 
+  test("SingleGame should terminate when out of guesses") {
+    // This game terminates after 1 bad guess, or it should at least.
+    val testState = new GameState("123", 1)
+    val input     = List("456")
+
+    for
+      console  <- TestConsole.make(input)
+      endState <- singleGame(using console).runS(testState)
+      stdOut   <- console.outLines
+    yield
+      assertEquals(endState.guesses, 0, "Should be no guesses left")
+      assertEquals(stdOut.last, Strings.outOfGuesses("123"))
+  }
+
+  test("SingleGame should terminate on correct guess") {
+    val testState = new GameState("123", 2)
+    val input     = List("123")
+
+    for
+      console  <- TestConsole.make(input)
+      endState <- singleGame(using console).runS(testState)
+      stdOut   <- console.outLines
+    yield
+      assertEquals(endState.guesses, 1, "Should be one guess left")
+      assertEquals(stdOut.last, Strings.success)
+  }
 end BagelsTest

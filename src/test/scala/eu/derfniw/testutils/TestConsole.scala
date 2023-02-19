@@ -36,14 +36,28 @@ class TestConsole private (
               case _ => IO.never[String]
   yield line
 
+  /**
+   * Returns a snapshot of the current state of stdout
+   * @return
+   */
   def outLines: IO[Seq[String]] = stdOutLines.get.map(_.split("\n"))
+
+  /**
+   * Returns a snapshot of the current state of stderr
+   * @return
+   */
   def errLines: IO[Seq[String]] = stdErrLines.get.map(_.split("\n"))
+
+  /**
+   * Returns a snapshot of the lines left in the "to read" buffer
+   */
+  def leftToRead: IO[Seq[String]] = linesToRead.get
 end TestConsole
 
 object TestConsole:
 
-  def make(linesToRead: String*): IO[Console[IO]] = for
-    readRef   <- IO.ref(linesToRead.toVector)
+  def make(lines: Seq[String]): IO[TestConsole] = for
+    readRef   <- IO.ref(lines.toVector)
     stdOutRef <- IO.ref("")
     stdErrRef <- IO.ref("")
   yield new TestConsole(readRef, stdOutRef, stdErrRef)
