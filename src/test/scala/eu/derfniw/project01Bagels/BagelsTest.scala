@@ -91,7 +91,7 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
     }
   }
 
-  test("SingleGame should terminate when out of guesses") {
+  test("singleGame should terminate when out of guesses") {
     // This game terminates after 1 bad guess, or it should at least.
     val testState = new GameState("123", 1)
     val input     = List("456")
@@ -105,7 +105,7 @@ class BagelsTest extends CatsEffectSuite with ScalaCheckEffectSuite:
       assertEquals(stdOut.last, Strings.outOfGuesses("123"))
   }
 
-  test("SingleGame should terminate on correct guess") {
+  test("singleGame should terminate on correct guess") {
     val testState = new GameState("123", 2)
     val input     = List("123")
 

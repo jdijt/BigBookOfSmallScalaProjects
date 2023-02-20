@@ -17,9 +17,9 @@ object Strings:
   def simulationProgress(current: Int) = s"Generated $current simulations."
 
   def result(birthdays: Int, matches: Int) =
-    s"""|Out of 100.000 simulations of $birthdays people there was a matching birthday in that group $matches times.
+    s"""|Out of 10.000 simulations of $birthdays people there was a matching birthday in that group $matches times.
         |
-        |This means that $birthdays people had a ${matches / 1000.0} % chance of having a matching birthday in their group.
+        |This means that $birthdays people had a ${matches / 100.0} % chance of having a matching birthday in their group.
         |""".stripMargin
 end Strings
 
@@ -45,10 +45,10 @@ def runSimulations(simulationCount: Int, birthdayCount: Int): IO[List[Boolean]] 
                      yield LocalDate.ofYearDay(2023, day)
                    )
                    .sequence
-        _ <- if sim % 10000 == 0 then IO.println(Strings.simulationProgress(sim)) else IO.unit
+        _ <- if sim % 1000 == 0 then IO.println(Strings.simulationProgress(sim)) else IO.unit
       yield hasDoubleDate(dates)
     )
-    .sequence
+    .parSequence
 end runSimulations
 
 object App extends IOApp.Simple:
@@ -60,7 +60,7 @@ object App extends IOApp.Simple:
       _       <- IO.println(Strings.start(num))
       _       <- IO.println(Strings.confirmBegin)
       _       <- IO.readLine
-      results <- runSimulations(100000, num)
+      results <- runSimulations(10000, num)
       _       <- IO.println(Strings.result(num, results.count(_ == true)))
       _       <- IO.println("Run again? (y or n)")
       answer  <- IO.readLine
