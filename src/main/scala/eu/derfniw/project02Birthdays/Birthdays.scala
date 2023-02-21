@@ -9,45 +9,44 @@ import cats.syntax.all.*
 import java.time.LocalDate
 
 object Strings:
-  val question     = "How many birthdays shall I generate?"
-  val confirmBegin = "Press enter to begin"
+  val question: String     = "How many birthdays shall I generate?"
+  val confirmBegin: String = "Press enter to begin"
 
-  def start(birthdays: Int) = s"Generating $birthdays random birthdays 100.000 times..."
+  def start(birthdays: Int): String = s"Generating $birthdays random birthdays 10.000 times..."
 
-  def simulationProgress(current: Int) = s"Generated $current simulations."
-
-  def result(birthdays: Int, matches: Int) =
+  def result(birthdays: Int, matches: Int): String =
     s"""|Out of 10.000 simulations of $birthdays people there was a matching birthday in that group $matches times.
         |
         |This means that $birthdays people had a ${matches / 100.0} % chance of having a matching birthday in their group.
         |""".stripMargin
 end Strings
 
-def generateBirthdays(count: Int)(using generator: Random[IO]): IO[List[LocalDate]] =
-  if count == 0 then Nil.pure
-  else
-    for day <- generator.betweenInt(1, 366); tail <- generateBirthdays(count - 1)
-    yield LocalDate.ofYearDay(2023, day) :: tail
+def generateBirthdays(count: Int, year: Int)(using generator: Random[IO]): IO[Vector[LocalDate]] =
+  require(count >= 0, "Count must be > 0")
+  val yearLength = LocalDate.ofYearDay(year, 1).lengthOfYear()
+  Vector
+    .unfold(count) { c =>
+      if c <= 0 then None
+      else
+        val day = generator.betweenInt(1, yearLength + 1).map(day => LocalDate.ofYearDay(year, day))
+        Some((day, c - 1))
+    }
+    .sequence
+end generateBirthdays
 
-def hasDoubleDate(l: List[LocalDate]): Boolean = l.toSet.size != l.size
+def hasDoubleDate(l: Seq[LocalDate]): Boolean = l.toSet.size != l.size
 
-def runSimulations(simulationCount: Int, birthdayCount: Int): IO[List[Boolean]] =
+def runSimulations(simulationCount: Int, birthdayCount: Int): IO[Vector[Boolean]] =
+  require(simulationCount >= 0, "Need a positive number of simulations to run.")
   import Strings.*
-  val generator = Random.javaUtilConcurrentThreadLocalRandom[IO]
-  List
-    .range(0, simulationCount)
-    .map(sim =>
-      for
-        dates <- List
-                   .range(0, birthdayCount)
-                   .map(_ =>
-                     for day <- generator.betweenInt(1, 366)
-                     yield LocalDate.ofYearDay(2023, day)
-                   )
-                   .sequence
-        _ <- if sim % 1000 == 0 then IO.println(Strings.simulationProgress(sim)) else IO.unit
-      yield hasDoubleDate(dates)
-    )
+  given Random[IO] = Random.javaUtilConcurrentThreadLocalRandom[IO]
+  Vector
+    .unfold(simulationCount) { c =>
+      if c <= 0 then None
+      else
+        val simResult = generateBirthdays(birthdayCount, LocalDate.now().getYear).map(hasDoubleDate)
+        Some(simResult, c - 1)
+    }
     .parSequence
 end runSimulations
 
