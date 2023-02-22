@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.std.Random
 import java.time.LocalDate
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite, ScalaCheckSuite}
-import org.scalacheck.Prop.{forAll, propBoolean}
+import org.scalacheck.Prop.*
 import org.scalacheck.effect.PropF
 import org.scalacheck.{Arbitrary, Gen}
 
