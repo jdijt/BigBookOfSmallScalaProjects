@@ -33,11 +33,12 @@ extension (l: Seq[Card])
     else possibleValues.filterNot(_ > 21).max
 
 type Deck = List[Card]
+
 object Deck:
   import Rank.*
   import Suit.*
 
-  protected val allCardsSorted =
+  private val allCardsSorted =
     for
       suit <- List(Hearts, Diamonds, Clubs, Spades)
       rank <- (2 to 10).map(v => Number(v)) ++ List(Ace, King, Queen, Jack)

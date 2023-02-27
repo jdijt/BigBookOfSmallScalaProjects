@@ -10,6 +10,7 @@ def readValidValue[F[_], A](prompt: String, checker: String => Either[A, String]
     F: Sync[F]
 ): F[A] =
   def readLoop: F[A] = for
+    _    <- C.print("> ")
     read <- C.readLine
     res <- checker(read) match
              case Left(v)    => F.pure(v)

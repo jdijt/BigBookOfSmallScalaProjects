@@ -26,7 +26,7 @@ class ReadValidValueTest extends CatsEffectSuite:
       val firstLine = outLines.head
       assertEquals(firstLine, "testPrompt", "Expected testPrompt as first output.")
 
-      val errorCount = outLines.count(_ == "Not yet!")
+      val errorCount = outLines.count(_.contains("Not yet!"))
       assertEquals(errorCount, 9, "expected 9x \"Not yet!\" on stdout")
 
       assertEquals(linesLeft, (11 to 20).map(_.show), "Should not read beyond first valid value")
