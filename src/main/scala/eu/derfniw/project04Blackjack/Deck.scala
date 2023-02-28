@@ -38,14 +38,12 @@ object Deck:
   import Rank.*
   import Suit.*
 
-  private val allCardsSorted =
+  val allCardsSorted: Deck =
     for
       suit <- List(Hearts, Diamonds, Clubs, Spades)
       rank <- (2 to 10).map(v => Number(v)) ++ List(Ace, King, Queen, Jack)
     yield Card(suit, rank)
 
   def shuffledDeck: IO[Deck] =
-    val generator = Random.javaUtilConcurrentThreadLocalRandom[IO]
-    for cards <- generator.shuffleList(allCardsSorted)
-    yield cards
+    Random.javaUtilConcurrentThreadLocalRandom[IO].shuffleList(allCardsSorted)
 end Deck

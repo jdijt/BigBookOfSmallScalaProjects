@@ -19,17 +19,17 @@ given ShowCard[Card] with
     def showCard(isOpen: Boolean): List[String] =
       if isOpen then
         List(
-          s" ___  ",
-          s"|${c.rank.display.padTo(2, ' ')} | ",
-          s"| ${c.suit.icon} | ",
-          s"|_${c.rank.display.leftPadTo(2, '_')}| "
+          s" ___ ",
+          s"|${c.rank.display.padTo(2, ' ')} |",
+          s"| ${c.suit.icon} |",
+          s"|_${c.rank.display.leftPadTo(2, '_')}|"
         )
       else
         List(
-          s" ___  ",
-          s"|## | ",
-          s"|###| ",
-          s"|_##| "
+          s" ___ ",
+          s"|## |",
+          s"|###|",
+          s"|_##|"
         )
 end given
 

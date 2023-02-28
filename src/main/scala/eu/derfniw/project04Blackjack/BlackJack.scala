@@ -25,17 +25,19 @@ object BlackJack:
     for newDeck <- Deck.shuffledDeck
     yield (st.copy(deck = newDeck, playerHand = List(), dealerHand = List(), currentBet = 0), ())
   }
-  def drawCard: GameState[Card] = StateT { st =>
-    (st.copy(deck = st.deck.tail), st.deck.head).pure[IO]
-  }
-  def addPlayerCard(c: Card): GameState[Int] = StateT { st =>
-    val newState = st.copy(playerHand = st.playerHand :+ c)
+  def drawPlayerCard: GameState[Int] = StateT { st =>
+    val newState = st.copy(playerHand = st.playerHand :+ st.deck.head, deck = st.deck.tail)
     (newState, newState.playerHand.sumCards).pure[IO]
   }
-  def addDealerCard(c: Card): GameState[Int] = StateT { st =>
-    val newState = st.copy(dealerHand = st.dealerHand :+ c)
+  def drawDealerCard: GameState[Int] = StateT { st =>
+    val newState = st.copy(dealerHand = st.dealerHand :+ st.deck.head, deck = st.deck.tail)
     (newState, newState.dealerHand.sumCards).pure[IO]
   }
+
+  def playerScore: GameState[Int] = StateT.inspect(_.playerHand.sumCards)
+
+  def dealerScore: GameState[Int] = StateT.inspect(_.dealerHand.sumCards)
+
   def incrementPlayerBet(bet: Int): GameState[Unit] = StateT.modify { st =>
     st.copy(playerMoney = st.playerMoney - bet, currentBet = st.currentBet + bet)
   }
@@ -47,24 +49,13 @@ object BlackJack:
 
   def dealInitialHands: GameState[Unit] =
     for
-      dealerHand <- List(drawCard, drawCard).sequence
-      playerHand <- List(drawCard, drawCard).sequence
-      _          <- dealerHand.traverse(addDealerCard)
-      _          <- playerHand.traverse(addPlayerCard)
+      _ <- List(drawDealerCard, drawDealerCard).sequence
+      _ <- List(drawPlayerCard, drawPlayerCard).sequence
     yield ()
 
-  def printState(showDealer: Boolean)(using c: Console[IO]): GameState[Unit] = StateT.inspectF {
-    st =>
-      for
-        _ <- c.println(s"Bet: ${st.currentBet}")
-        _ <- c.println("")
-        _ <- c.println(if showDealer then s"Dealer: ${st.dealerHand.sumCards}" else s"Dealer: ???")
-        _ <- st.dealerHand.showCard(showDealer).traverse(c.println)
-        _ <- c.println("")
-        _ <- c.println(s"Player: ${st.playerHand.sumCards}")
-        _ <- st.playerHand.showCard(true).traverse(c.println)
-        _ <- c.println("")
-      yield ()
+  def payOutBet(factor: Double): GameState[Unit] = StateT.modify { st =>
+    val earnings = (st.currentBet * factor).toInt
+    st.copy(playerMoney = st.playerMoney + earnings, currentBet = 0)
   }
 
 end BlackJack

@@ -58,6 +58,11 @@ object Game extends IOApp.Simple:
       case Some(_)                                => Right("Bet must be greater than 0")
       case None                                   => Right(s"Invalid number: $in")
 
+  enum PlayerAction:
+    case Hit
+    case Stand
+    case Double
+
   def parsePlayerAction(first: Boolean)(in: String): Either[PlayerAction, String] =
     in.toLowerCase match
       case "h"          => Left(PlayerAction.Hit)
@@ -65,28 +70,15 @@ object Game extends IOApp.Simple:
       case "d" if first => Left(PlayerAction.Double)
       case _            => Right(s"""Invalid input: "$in"""")
 
-  enum PlayerAction:
-    case Hit
-    case Stand
-    case Double
-
   /** Processes the effects of a players action on the state And returns the players new score.
-    *
-    * @param action
-    * @return
     */
   def processPlayerAction(action: PlayerAction): GameState[Int] = action match
-    case PlayerAction.Hit =>
-      for
-        card     <- drawCard
-        newScore <- addPlayerCard(card)
-      yield newScore
-    case PlayerAction.Stand => StateT.inspect(_.playerHand.sumCards)
+    case PlayerAction.Hit => drawPlayerCard
+    case PlayerAction.Stand => playerScore
     case PlayerAction.Double =>
       for
         _        <- doubleBet
-        cards    <- List(drawCard, drawCard).sequence
-        newScore <- cards.traverse(addPlayerCard).map(_.last)
+        newScore <- List(drawPlayerCard, drawPlayerCard).sequence.map(_.last)
       yield newScore
 
   def playerActions(first: Boolean = true)(using c: Console[IO]): GameState[Int] =
@@ -108,7 +100,7 @@ object Game extends IOApp.Simple:
 
   def dealerActions(using c: Console[IO]): GameState[Int] =
     for
-      _ <- BlackJack.printState(true)
+      _ <- printState(true)
       _ <- StateT.liftF(c.println("Press enter to let dealer continue...") >> c.readLine)
       newScore <- StateT
                     .inspect[IO, BlackJack, Int]((st: BlackJack) => st.dealerHand.sumCards)
@@ -116,8 +108,7 @@ object Game extends IOApp.Simple:
                       if score > 17 then StateT.liftF(score.pure)
                       else
                         for
-                          card       <- drawCard
-                          _          <- addDealerCard(card)
+                          _          <- drawDealerCard
                           finalScore <- dealerActions
                         yield finalScore
                     )
@@ -131,18 +122,29 @@ object Game extends IOApp.Simple:
     else if playerScore == dealerScore then
       StateT
         .liftF(c.println("Tie, no payout"))
-        .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + st.currentBet))
+        .flatMap(_ => payOutBet(1)) // just return bet.
     else if playerScore > dealerScore && playerScore == 21 then // Implies dealer < 21, together with prev.
       StateT
         .liftF(c.println("Player wins with blackjack, 3:2 payout!"))
-        .modify((st: BlackJack) =>
-          st.copy(playerMoney = (st.playerMoney + 2.5 * st.currentBet).toInt)
-        ) // 1x bet + 1.5 times bet payout
+        .flatMap(_ => payOutBet(2.5))
     else if playerScore > dealerScore || dealerScore > 21 then // Here this is not the case, so we check for dealer bust
       StateT
         .liftF(c.println("Player wins!"))
-        .modify((st: BlackJack) => st.copy(playerMoney = st.playerMoney + 2 * st.currentBet))
+        .flatMap(_ => payOutBet(2))
     else
       StateT
         .liftF(c.println("Dealer wins!"))
+
+  def printState(showDealer: Boolean)(using c: Console[IO]): GameState[Unit] = StateT.inspectF { st =>
+    for
+      _ <- c.println(s"Bet: ${st.currentBet}")
+      _ <- c.println("")
+      _ <- c.println(if showDealer then s"Dealer: ${st.dealerHand.sumCards}" else s"Dealer: ???")
+      _ <- st.dealerHand.showCard(showDealer).traverse(c.println)
+      _ <- c.println("")
+      _ <- c.println(s"Player: ${st.playerHand.sumCards}")
+      _ <- st.playerHand.showCard(true).traverse(c.println)
+      _ <- c.println("")
+    yield ()
+  }
 end Game
