@@ -21,10 +21,17 @@ object BlackJack:
 
   val initialState: BlackJack = BlackJack(5000, 0, List(), List(), List())
 
-  def renewDeck: GameState[Unit] = StateT { st =>
-    for newDeck <- Deck.shuffledDeck
-    yield (st.copy(deck = newDeck, playerHand = List(), dealerHand = List(), currentBet = 0), ())
-  }
+  def renewTable: GameState[Unit] =
+    for
+      _ <- StateT.modifyF[IO, BlackJack] { st =>
+             Deck.shuffledDeck.map { newDeck =>
+               st.copy(deck = newDeck, playerHand = List(), dealerHand = List(), currentBet = 0)
+             }
+           }
+      _ <- List(drawDealerCard, drawDealerCard).sequence
+      _ <- List(drawPlayerCard, drawPlayerCard).sequence
+    yield ()
+
   def drawPlayerCard: GameState[Int] = StateT { st =>
     val newState = st.copy(playerHand = st.playerHand :+ st.deck.head, deck = st.deck.tail)
     (newState, newState.playerHand.sumCards).pure[IO]
@@ -47,14 +54,8 @@ object BlackJack:
     _  <- incrementPlayerBet(st.currentBet)
   yield ()
 
-  def dealInitialHands: GameState[Unit] =
-    for
-      _ <- List(drawDealerCard, drawDealerCard).sequence
-      _ <- List(drawPlayerCard, drawPlayerCard).sequence
-    yield ()
-
   def payOutBet(factor: Double): GameState[Unit] = StateT.modify { st =>
-    val earnings = (st.currentBet * factor).toInt
+    val earnings = math.ceil(st.currentBet * factor).toInt
     st.copy(playerMoney = st.playerMoney + earnings, currentBet = 0)
   }
 

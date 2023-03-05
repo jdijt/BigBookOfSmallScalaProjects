@@ -24,14 +24,13 @@ object Game extends IOApp.Simple:
 
   def gameLoop: GameState[Unit] =
     for
-      _   <- renewDeck
+      _   <- renewTable
       bet <- initialBet
       _ <- bet match
              case None => StateT.pure[IO, BlackJack, Unit](())
              case Some(bet) =>
                for
                  _           <- incrementPlayerBet(bet)
-                 _           <- dealInitialHands
                  playerScore <- playerActions()
                  dealerScore <- dealerActions
                  _           <- processWinLose(playerScore, dealerScore)
